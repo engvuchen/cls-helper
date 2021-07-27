@@ -1,16 +1,15 @@
 const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
-let matchAttr = /"([a-zA-Z]+)": (.+),/;
+let matchAttr = /"([a-zA-Z]+)":\s*([a-zA-Z0-9\[\]""'']+)/;
 const matchComment = /\/\/\s(.+)/;
-const matchComponentExit = /component\s*:(.+),/;
+const matchComponentExit = /component\s*:\s*("[a-zA-Z]+"|'[a-zA-Z]+')\s*,/;
 const matchAttrExit = /attributes\s*:/;
-const matchValidityExit = /validity\s8:/;
+const matchValidExit = /validity\s*:/;
 
-// node_modules/@tencent/weadmin-components-bizadmin/src/v2/components/button/button.vue
-// 'origincalendar',
-// 'selectlist',
-// 'upload-item',
+let complementsMap = {};
+
+// todo: 写一个NPM包维护的 主组件列表
 let MAIN_COMPONENT_NAMES = [
   'aggregatedata',
   'button',
@@ -39,115 +38,126 @@ let MAIN_COMPONENT_NAMES = [
 ];
 
 function activate(context) {
-  console.log('cls-helper running');
+  if (vscode.workspace.workspaceFolders) {
+    let [folder] = vscode.workspace.workspaceFolders;
+    let { fsPath } = folder.uri;
+    let snippetPath = path.resolve(`${fsPath}/.vscode/snippets.code-snippets`);
+    fs.access(snippetPath, fs.constants.F_OK | fs.constants.W_OK, err => {
+      if (err) {
+        vscode.window.showErrorMessage(`${snippetPath} ${err.code === 'ENOENT' ? 'does not exist' : 'is read-only'}`);
+        return;
+      } else {
+        // # 生成 complementItem 列表
+        let parseResult = JSON.parse(fs.readFileSync(snippetPath));
+        MAIN_COMPONENT_NAMES.forEach(componentName => {
+          getComplementItem(componentName, 'attributes', parseResult, complementsMap);
+          getComplementItem(componentName, 'validity', parseResult, complementsMap);
+        });
 
-  let snippetPath = path.resolve(`${process.cwd()}/.vscode/snippets.code-snippets`);
-  fs.access(snippetPath, constants.F_OK | constants.W_OK, err => {
-    if (err) {
-      console.error(`${snippetPath} ${err.code === 'ENOENT' ? 'does not exist' : 'is read-only'}`);
-    } else {
-      let parseResult = JSON.parse(fs.readFileSync(snippetPath));
-      let complements = {};
-      MAIN_COMPONENT_NAMES.forEach(componentName => {
-        getComplementItem(componentName, 'attributes', parseResult, complements);
-        getComplementItem(componentName, 'validity', parseResult, complements);
-      });
-    }
-  });
+        // # 根据指定模式，动态生成匹配文本
+        const provider = vscode.languages.registerCompletionItemProvider(
+          'vue',
+          /**
+           * 1. 通过 未写完的属性名联想（attributes.hi） 。拉取 snippet；
+           * 2. 通过 写完的属性名联想（attributes.hide）。拉取 值的范围；
+           * 联想符：' '， ':', '"', "'"
+           */
+          {
+            provideCompletionItems(document, position) {
+              const curLine = document.lineAt(position.line).text.substr(0, position.character);
 
-  // # 根据指定模式，动态生成匹配文本
-  const provider = vscode.languages.registerCompletionItemProvider(
-    'vue',
-    {
-      provideCompletionItems(document, position) {
-        const curLine = document.lineAt(position).text.substr(0, position.character);
-        // 当前行有 'component' +'attributes' / 'validity'
-        if ((curLine.includes('component') && curLine.includes('attributes')) || curLine.includes('validity')) {
-          let componentName = curLine.match(matchComponentExit);
+              /**
+               * 1. 当前行有 'component' +'attributes' / 'validity'
+               * TODO: 2. 当前行 'component' +'attributes' / 'validity' + 属性名
+               */
+              if (curLine.match(matchComponentExit)) {
+                let [, componentName] = curLine.match(matchComponentExit);
+                let attrExit = matchAttrExit.test(curLine);
+                let validExit = matchValidExit.test(curLine);
+                let attrType = (attrExit && 'attributes') || (validExit && 'validity');
+                let { attrs, values } = complementsMap[componentName][attrType];
+                if (attrs.length) return attrs;
+              } else {
+                let { line: originLineNum } = position;
+                let newLineNum = originLineNum;
+                let curLine = document.lineAt(position).text.substr(0, position.character);
 
-          return undefined;
-        }
+                /**
+                 * line 往上最多回溯10行，直到找到匹配的 标签
+                 */
+                let lineRecord = [];
+                while (originLineNum - newLineNum <= 20 && newLineNum >= 0) {
+                  if (newLineNum !== originLineNum) curLine = document.lineAt(newLineNum).text;
+                  lineRecord.push(curLine);
+                  if (matchComponentExit.test(curLine)) break;
+                  newLineNum--;
+                }
 
-        /**
-         * 1. 仅指定 attributes
-         * 1.1 当前行 或 向上找, 可以找到 attribute
-         * 1.2 发现 '}'
-         *
-         */
+                lineRecord.reverse();
 
-        // new vscode.CompletionItem => 返回对象
-        // 匹配结果
-        // icon类型: Value / Method / Snippet
-        return {
-          label: tag, // 提示符
-          sortText: `0${tag}`, // 检索见过排序
-          insertText: new SnippetString(prettyHTML('<' + snippets.join(''), { indent_size: this.size }).substr(1)), // 插入文本
-          kind: CompletionItemKind.Snippet, // 文本图标
-          // tagVal.version
-          detail: `cls-ui`,
-          documentation: tagVal.description, // 描述
-        };
-      },
-    },
-    ' ',
-    ':'
-  );
-  /**
-   * 1. 通过 未写完的属性名联想（attributes.hi） 。拉取 snippet；
-   * 2. 通过 写完的属性名联想（attributes.hide）。拉取 值的范围；
-   */
-  /**
-   *
-   * ' ',
-   * ':',
-   *
-   * '"',
-   *"'"
-   */
+                let matchComponentNameResult = lineRecord[0].match(matchComponentExit);
+                if (matchComponentNameResult) {
+                  let [, componentName] = matchComponentNameResult;
+                  componentName = componentName.replace(/"/g, '').replace(/'/g, '');
 
-  context.subscriptions.push(provider);
+                  let attrExistIndex = lineRecord.findIndex(curLine => matchAttrExit.test(curLine));
+                  let validExistIndex = lineRecord.findIndex(curLine => matchValidExit.test(curLine));
+
+                  if (componentName && (attrExistIndex > -1 || validExistIndex > -1)) {
+                    let attrName =
+                      Math.max(attrExistIndex, validExistIndex) === attrExistIndex ? 'attributes' : 'validity';
+
+                    console.log('complementsMap[componentName]', complementsMap[componentName]);
+
+                    if (complementsMap[componentName] && complementsMap[componentName][attrName]) {
+                      return complementsMap[componentName][attrName].attrs;
+                    }
+                  }
+                }
+              }
+            },
+          },
+          '\n'
+        );
+        // ':'
+
+        context.subscriptions.push(provider);
+      }
+    });
+  }
 }
 function deactivate() {}
 
-function getPreTag(position) {
-  // position => {line, character}
-  let line = position.line;
-  let tag = null;
-  let txt = this.getTextBeforePosition(position);
-
-  /**
-   * line 往上最多回溯10行，直到找到匹配的 标签
-   */
-  while (position.line - line < 10 && line >= 0) {
-    if (line !== position.line) {
-      txt = this._document.lineAt(line).text;
-    }
-
-    console.log('txt', txt);
-    tag = this.matchTag(this.tagReg, txt, line);
-
-    if (tag === 'break') return;
-    if (tag) return tag;
-    line--;
-  }
-  return;
-}
-
+/**
+ * 给 complementsMap 添加 complementItem
+ * @param {String} componentName
+ * @param {String} attrName
+ * @param {Object} parseResult
+ * @param {Object} collection
+ */
 function getComplementItem(componentName = '', attrName = '', parseResult = {}, collection = {}) {
-  // { button: { attributes: { hide: complementItem }, validity}, ... }
   let keyName = `@cls cls-${componentName}-${attrName}`;
   if (parseResult[keyName]) {
     let { body } = parseResult[keyName];
-
     let complementItem = handleSnippetBody(componentName, attrName, body);
-    if (collection[componentName][attrName]) {
-      Object.assign(collection[componentName][attrName], complementItem);
-    } else {
-      collection[componentName][attrName] = complementItem;
-    }
+
+    if (!collection[componentName]) collection[componentName] = {};
+    collection[componentName][attrName] = complementItem;
   }
 }
+/**
+ * 根据 body 构造 complementItem
+ * @param {String} componentName 组件名, eg: button
+ * @param {String} attrType 属性名, eg: attributes/validity
+ * @param {Array} body 对应 snippet 结构的 body
+ */
 function handleSnippetBody(componentName = '', attrType = '', body = []) {
+  let result = {
+    attrs: [],
+    values: [],
+  };
+
+  let { attrs, values } = result;
   body.forEach((curStr, index) => {
     let matchAttrResult = curStr.match(matchAttr);
     let attrName = matchAttrResult ? matchAttrResult[1] : '';
@@ -156,49 +166,31 @@ function handleSnippetBody(componentName = '', attrType = '', body = []) {
     let matchCommentResult = curStr.match(matchComment);
     let comment = matchCommentResult ? matchCommentResult[1] : '';
 
-    // console.log(attrName, attrValue, comment);
-
     if (attrName && attrValue) {
-      return {
-        attrName: {
-          snippet: {
-            detail: `cls-ui`,
-            kind: CompletionItemKind.Snippet,
-            label: componentName,
-            sortText: `0${componentName}${attrType}${attrName}`,
-            insertText: new SnippetString(`${attrName}: \${2:${attrValue}}`),
-            documentation: comment || '',
-          },
-          value: {
-            detail: `cls-ui`,
-            kind: CompletionItemKind.Snippet,
-            label: componentName,
-            sortText: `0${componentName}${attrType}${attrName}`,
-            // new SnippetString(`\${1:${attrValue}}`)
-            insertText: attrValue,
-            documentation: comment || '',
-          },
-        },
-      };
+      console.log('attrValue', attrValue);
+
+      attrs.push({
+        detail: `cls-ui`,
+        kind: vscode.CompletionItemKind.Snippet,
+        label: attrName, // 联想的选项名
+        sortText: `0${componentName}${attrType}${attrName}`,
+        insertText: new vscode.SnippetString(`${attrName}: \${2:${attrValue}},`),
+        documentation: comment || '',
+      });
+      values.push({
+        detail: `cls-ui`,
+        kind: vscode.CompletionItemKind.Value,
+        label: attrName,
+        sortText: `0_${componentName}_${attrType}_${attrName}`,
+        // todo: 应该是个 snippet 选项，但 CLS 的 snippet 只有备注
+        // new attrstring(`"\${1|${attrValue}|}"`)
+        insertText: attrValue,
+        documentation: comment || '',
+      });
     }
   });
 
-  var result = JSON.parse(body.join(''));
-  console.log('result', result, typeof result);
-}
-
-/**
- *
- * @param position 光标位置
- * @returns 指定范围内的文本（某一行文字的开始、结束？）
- */
-function getTextBeforePosition(position) {
-  var start = new Position(position.line, 0);
-  var range = new Range(start, position);
-
-  console.log('getTextBeforePosition', this._document.getText(range));
-
-  return this._document.getText(range);
+  return result;
 }
 
 module.exports = {
