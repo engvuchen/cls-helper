@@ -1,7 +1,9 @@
 {
   "name": "cls-helper",
   "displayName": "cls-helper",
-  "description": "",
+  "description": "为wecomponent组件库提供进行自动补全能力",
+  "icon": "assets/icon256.png",
+  "publisher": "engvuchen",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.58.0"
