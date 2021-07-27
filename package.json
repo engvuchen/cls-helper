@@ -2,7 +2,6 @@
   "name": "cls-helper",
   "displayName": "cls-helper",
   "description": "为wecomponent组件库提供进行自动补全能力",
-  "icon": "assets/icon256.png",
   "publisher": "engvuchen",
   "version": "0.0.1",
   "engines": {
@@ -12,18 +11,10 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:vue",
-    "onLanguage:plaintext"
+    "onLanguage:vue"
   ],
   "main": "./extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "cls-helper.helloWorld",
-        "title": "Hello World"
-      }
-    ]
-  },
+  "contributes": {},
   "scripts": {
     "lint": "eslint .",
     "pretest": "npm run lint",
