@@ -6,6 +6,7 @@ const matchComment = /\/\/\s(.+)/;
 const matchComponentExit = /component\s*:\s*("[a-zA-Z]+"|'[a-zA-Z]+')\s*,/;
 const matchAttrExit = /attributes\s*:/;
 const matchValidExit = /validity\s*:/;
+const matchOtherAttrConExit = /(items|events|decoration)\s*:/;
 
 let complementsMap = {};
 
@@ -92,6 +93,8 @@ function activate(context) {
                   if (matchComponentExit.test(curLine)) break;
                   newLineNum--;
                 }
+                // ## 路过其他容器属性，退出（eg: items/event/decoration）
+                if (lineRecord.find(curLine => matchOtherAttrConExit.test(curLine))) return undefined;
 
                 lineRecord.reverse();
 
