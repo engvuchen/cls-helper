@@ -1,12 +1,13 @@
 const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
-let matchAttr = /"([a-zA-Z]+)":\s*([a-zA-Z0-9\[\]""'']+)/;
+let matchAttr = /"([a-zA-Z]+)":\s*([a-zA-Z0-9\u4e00-\u9fa5\[\]""'']+)/;
 const matchComment = /\/\/\s(.+)/;
-const matchComponentExit = /component\s*:\s*("[a-zA-Z]+"|'[a-zA-Z]+')\s*,/;
+const matchComponentExit = /^\s*component\s*:\s*("[a-zA-Z]+"|'[a-zA-Z]+')\s*,$/;
 const matchAttrExit = /attributes\s*:/;
 const matchValidExit = /validity\s*:/;
-const matchOtherAttrConExit = /(items|events|decoration)\s*:/;
+const matchSeparatorExit = /((items|events|decoration)\s*:|};)/;
+const matchObjectKey = /^\s*[a-zA-Z]+\s*:.+,$/;
 
 let complementsMap = {};
 
@@ -45,7 +46,7 @@ function activate(context) {
     let snippetPath = path.resolve(`${fsPath}/.vscode/snippets.code-snippets`);
     fs.access(snippetPath, fs.constants.F_OK | fs.constants.W_OK, err => {
       if (err) {
-        vscode.window.showErrorMessage(`${snippetPath} ${err.code === 'ENOENT' ? 'does not exist' : 'is read-only'}`);
+        console.error(`${snippetPath} ${err.code === 'ENOENT' ? 'does not exist' : 'is read-only'}`);
         return;
       } else {
         // # 生成 complementItem 列表
@@ -83,46 +84,54 @@ function activate(context) {
                 let newLineNum = originLineNum;
                 let curLine = document.lineAt(position).text.substr(0, position.character);
 
-                /**
-                 * line 往上最多回溯10行，直到找到匹配的 标签
-                 */
+                // line 往上回溯，找到 component 名停止
                 let lineRecord = [];
-                while (originLineNum - newLineNum <= 20 && newLineNum >= 0) {
+                while (originLineNum - newLineNum <= 30 && newLineNum >= 0) {
                   if (newLineNum !== originLineNum) curLine = document.lineAt(newLineNum).text;
                   lineRecord.push(curLine);
                   if (matchComponentExit.test(curLine)) break;
                   newLineNum--;
                 }
                 // ## 路过其他容器属性，退出（eg: items/event/decoration）
-                if (lineRecord.find(curLine => matchOtherAttrConExit.test(curLine))) return undefined;
+                // if (lineRecord.find(curLine => matchSeparatorExit.test(curLine))) return undefined;
 
+                lineRecord = lineRecord.map(curStr => curStr.replace(/\s+/g, '')).filter(curStr => curStr.length);
                 lineRecord.reverse();
 
                 let matchComponentNameResult = lineRecord[0].match(matchComponentExit);
                 if (matchComponentNameResult) {
                   let [, componentName] = matchComponentNameResult;
-                  componentName = componentName.replace(/"/g, '').replace(/'/g, '');
+                  componentName = componentName.replace(/"|'/g, '');
 
                   let attrExistIndex = lineRecord.findIndex(curLine => matchAttrExit.test(curLine));
                   let validExistIndex = lineRecord.findIndex(curLine => matchValidExit.test(curLine));
 
                   if (componentName && (attrExistIndex > -1 || validExistIndex > -1)) {
-                    let attrName =
-                      Math.max(attrExistIndex, validExistIndex) === attrExistIndex ? 'attributes' : 'validity';
+                    // 若 当前行不紧跟 attributes/validty，判断中间内容是否都符合条件
+                    let inWrapperObject = true;
+                    let wrapperKeyIndex = Math.max(attrExistIndex, validExistIndex);
 
-                    console.log('complementsMap[componentName]', complementsMap[componentName]);
+                    if (wrapperKeyIndex !== lineRecord.length - 1) {
+                      if (lineRecord.slice(wrapperKeyIndex + 1).some(curStr => !matchObjectKey.test(curStr))) {
+                        inWrapperObject = false;
+                      }
+                    }
 
-                    if (complementsMap[componentName] && complementsMap[componentName][attrName]) {
+                    let attrName = wrapperKeyIndex === attrExistIndex ? 'attributes' : 'validity';
+                    if (inWrapperObject && complementsMap[componentName] && complementsMap[componentName][attrName]) {
                       return complementsMap[componentName][attrName].attrs;
+                    } else {
+                      console.error(`输入位置不在 attributes/validity 中 或 ${componentName}.${attrName} 不存在`);
                     }
                   }
+                } else {
+                  console.error('组件名未匹配');
                 }
               }
             },
           },
           '\n'
         );
-        // ':'
 
         context.subscriptions.push(provider);
       }
@@ -170,8 +179,6 @@ function handleSnippetBody(componentName = '', attrType = '', body = []) {
     let comment = matchCommentResult ? matchCommentResult[1] : '';
 
     if (attrName && attrValue) {
-      console.log('attrValue', attrValue);
-
       attrs.push({
         detail: `cls-ui`,
         kind: vscode.CompletionItemKind.Snippet,
