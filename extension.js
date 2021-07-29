@@ -1,7 +1,8 @@
 const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
-let matchAttr = /"([a-zA-Z]+)":\s*([a-zA-Z0-9\u4e00-\u9fa5\[\]""'']+)/;
+// 匹配 snippet 字符串中的 属性名、属性值(英文、中文、函数、数组,)
+let matchAttr = /\s*"([a-zA-Z]+)":\s*([a-zA-Z0-9\u4e00-\u9fa5\s\[\]\(\)\{\}"'=>]+)(?=,|\s)/;
 const matchComment = /\/\/\s(.+)/;
 const matchComponentExit = /^\s*component\s*:\s*("[a-zA-Z]+"|'[a-zA-Z]+')\s*,$/;
 const matchAttrExit = /attributes\s*:/;
@@ -61,7 +62,7 @@ function activate(context) {
           'vue',
           /**
            * 1. 通过 未写完的属性名联想（attributes.hi） 。拉取 snippet；
-           * 2. 通过 写完的属性名联想（attributes.hide）。拉取 值的范围；
+           * 2. todo: 通过 写完的属性名联想（attributes.hide）。拉取 值的范围；
            * 联想符：' '， ':', '"', "'"
            */
           {
@@ -119,6 +120,8 @@ function activate(context) {
 
                     let attrName = wrapperKeyIndex === attrExistIndex ? 'attributes' : 'validity';
                     if (inWrapperObject && complementsMap[componentName] && complementsMap[componentName][attrName]) {
+                      console.log(complementsMap[componentName][attrName].attrs);
+
                       return complementsMap[componentName][attrName].attrs;
                     } else {
                       console.error(`输入位置不在 attributes/validity 中 或 ${componentName}.${attrName} 不存在`);
@@ -183,7 +186,7 @@ function handleSnippetBody(componentName = '', attrType = '', body = []) {
         detail: `cls-ui`,
         kind: vscode.CompletionItemKind.Snippet,
         label: attrName, // 联想的选项名
-        sortText: `0${componentName}${attrType}${attrName}`,
+        sortText: `0${componentName}_${attrType}_${attrName}`,
         insertText: new vscode.SnippetString(`${attrName}: \${2:${attrValue}},`),
         documentation: comment || '',
       });
