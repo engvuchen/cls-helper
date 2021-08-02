@@ -1,44 +1,17 @@
 const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
+const MAIN_COMPONENT_NAMES = require('cls-main-component-names');
+
 // 匹配 snippet 字符串中的 属性名、属性值(英文、中文、函数、数组,)
-let matchAttr = /\s*"([a-zA-Z]+)":\s*([a-zA-Z0-9\u4e00-\u9fa5\s\[\]\(\)\{\}"'=>]+)(?=,|\s)/;
+const matchAttr = /\s*"([a-zA-Z]+)":\s*([a-zA-Z0-9\u4e00-\u9fa5\s\[\]\(\)\{\}"'=>]+)(?=,|\s)/;
 const matchComment = /\/\/\s(.+)/;
 const matchComponentExit = /^\s*component\s*:\s*("[a-zA-Z]+"|'[a-zA-Z]+')\s*,$/;
 const matchAttrExit = /attributes\s*:/;
 const matchValidExit = /validity\s*:/;
-const matchSeparatorExit = /((items|events|decoration)\s*:|};)/;
 const matchObjectKey = /^\s*[a-zA-Z]+\s*:.+,$/;
 
 let complementsMap = {};
-
-// todo: 写一个NPM包维护的 主组件列表
-let MAIN_COMPONENT_NAMES = [
-  'aggregatedata',
-  'button',
-  'calendar',
-  'chart',
-  'checkbox',
-  'container',
-  'input',
-  'link',
-  'vpagination',
-  'processor',
-  'progress',
-  'querybuilder',
-  'radio',
-  // 'resourceMark',
-  'richtext',
-  'schedule',
-  'select',
-  'tab',
-  'table',
-  'tag',
-  'text',
-  'textarea',
-  'tree',
-  'upload',
-];
 
 function activate(context) {
   if (vscode.workspace.workspaceFolders) {
@@ -93,8 +66,6 @@ function activate(context) {
                   if (matchComponentExit.test(curLine)) break;
                   newLineNum--;
                 }
-                // ## 路过其他容器属性，退出（eg: items/event/decoration）
-                // if (lineRecord.find(curLine => matchSeparatorExit.test(curLine))) return undefined;
 
                 lineRecord = lineRecord.map(curStr => curStr.replace(/\s+/g, '')).filter(curStr => curStr.length);
                 lineRecord.reverse();
@@ -195,8 +166,7 @@ function handleSnippetBody(componentName = '', attrType = '', body = []) {
         kind: vscode.CompletionItemKind.Value,
         label: attrName,
         sortText: `0_${componentName}_${attrType}_${attrName}`,
-        // todo: 应该是个 snippet 选项，但 CLS 的 snippet 只有备注
-        // new attrstring(`"\${1|${attrValue}|}"`)
+        // todo: 应该是个 snippet 选项，但 CLS 的 snippet 只有备注; new attrstring(`"\${1|${attrValue}|}"`)
         insertText: attrValue,
         documentation: comment || '',
       });
