@@ -30,6 +30,8 @@ function activate(context) {
           getComplementItem(componentName, 'validity', parseResult, complementsMap);
         });
 
+        console.log('complementsMap', complementsMap);
+
         // # 根据指定模式，动态生成匹配文本
         const provider = vscode.languages.registerCompletionItemProvider(
           'vue',
@@ -123,6 +125,9 @@ function deactivate() {}
  */
 function getComplementItem(componentName = '', attrName = '', parseResult = {}, collection = {}) {
   let keyName = `@cls cls-${componentName}-${attrName}`;
+
+  console.log('parseResult[keyName]', parseResult[keyName], keyName);
+
   if (parseResult[keyName]) {
     let { body } = parseResult[keyName];
     let complementItem = handleSnippetBody(componentName, attrName, body);
