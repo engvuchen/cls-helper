@@ -30,8 +30,6 @@ function activate(context) {
           getComplementItem(componentName, 'validity', parseResult, complementsMap);
         });
 
-        console.log('complementsMap', complementsMap);
-
         // # 根据指定模式，动态生成匹配文本
         const provider = vscode.languages.registerCompletionItemProvider(
           'vue',
@@ -93,8 +91,6 @@ function activate(context) {
 
                     let attrName = wrapperKeyIndex === attrExistIndex ? 'attributes' : 'validity';
                     if (inWrapperObject && complementsMap[componentName] && complementsMap[componentName][attrName]) {
-                      console.log(complementsMap[componentName][attrName].attrs);
-
                       return complementsMap[componentName][attrName].attrs;
                     } else {
                       console.error(`输入位置不在 attributes/validity 中 或 ${componentName}.${attrName} 不存在`);
@@ -125,8 +121,6 @@ function deactivate() {}
  */
 function getComplementItem(componentName = '', attrName = '', parseResult = {}, collection = {}) {
   let keyName = `@cls cls-${componentName}-${attrName}`;
-
-  console.log('parseResult[keyName]', parseResult[keyName], keyName);
 
   if (parseResult[keyName]) {
     let { body } = parseResult[keyName];
