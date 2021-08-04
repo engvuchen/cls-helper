@@ -1,18 +1,21 @@
-# cls-helper
+# Cls-Helper
 
-## 功能
+结合 [Cls-Snippet-Gen](https://github.com/engvuchen/cls-snippet-gen)，在 Vue 文件中提供自动补全功能。
 
-1. 自动补全
+## 使用
 
-仅在 vue 文件中生效。
+均在项目根目录下运行：
 
-## 发布日志
+```bash
+# 内网
+npm config set registry http://r.tnpm.oa.com/
+npm install @tencent/weadmin-components-bizadmin
+npx cls-snippet-gen --add
+```
 
-### 0.0.2
-
-1. 优化输入区域匹配： attributes/validity 对象中。
-2. 在当前行往上查找 20 行。
-
-### 0.0.1
-
-1. 通过换行符激活补全。在符合条件的 attributes/validity 区域生效。
+```bash
+# 外网
+npm config set registry https://registry.npmjs.org/
+npm install @weadmin/wecomponents
+npx cls-snippet-gen --add --prod
+```
